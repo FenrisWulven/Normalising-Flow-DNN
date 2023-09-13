@@ -1,0 +1,5 @@
+
+#help from: https://sebastiancallh.github.io/post/affine-normalizing-flows/
+
+
+class NormalisingFlow(nn.module)
