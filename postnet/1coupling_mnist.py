@@ -29,7 +29,7 @@ from IPython.display import clear_output
 
 import wandb
 import os 
-os.environ['WANDB_NOTEBOOK_NAME'] = 'Coupling_mnist_plots.ipynb'
+#os.environ['WANDB_NOTEBOOK_NAME'] = 'Coupling_mnist_plots.ipynb'
 # set seed
 torch.manual_seed(42)
 np.random.seed(42)
@@ -38,25 +38,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
 
 ############ HYPERPARAMETERS ################
-wandb.init(
-    project='Normalising-Flow-DNN',
-    config={
-        "learning_rate": 0.0031,
-        "weight_decay": 1e-6,
-        "epochs": 5,
-        "batch_size": 64,
-        "validation_every_steps": 100, 
-        'architecture': 'CNN',
-        'dataset': 'MNIST'
-    },
-    #name='run_name',
-    #tags=['experiment1', 'CNN'],
-    #notes='Trying out a new architecture',
-    #dir='/path/to/log/files',
-    ##entity='my_team',
-    #group='experiment_group',
-    #job_type='train'
-)
+
 #lr = 0.00005
 training_lr = 3e-4 # start of training (end of warmup ) #Note: High LR create NaNs and Inf 
 start_lr = 1e-9 # start of warmup
@@ -83,6 +65,7 @@ num_hidden = 3 # number of hidden layers
 hidden_dim = 64 # neurons in hidden layers
 num_flows = 6 # number of coupling flow layers
 
+dataset_name = 'MNIST'
 # architecture='conv'
 # input_dims=[28, 28, 1]
 # output_dim=10
@@ -95,10 +78,52 @@ num_flows = 6 # number of coupling flow layers
 # k_lipschitz=None
 # budget_function='id'
 
+wandb.init(
+    project='Normalising-Flow-DNN',
+    config={
+        'architecture': 'PostNet',
+        'dataset': dataset_name,
+        'training_lr': training_lr,
+        'start_lr': start_lr,
+        'min_lr': min_lr,
+        'num_epochs': num_epochs,
+        'warmup_steps': warmup_steps,
+        'validation_every_steps': validation_every_steps,
+        'weight_decay': weight_decay,
+        'batch_size': batch_size,
+        'early_stop_delta': early_stop_delta,
+        'early_stop_patience': early_stop_patience,
+        'reg': reg,
+        'annealing_interval': annealing_interval,
+        'num_classes': num_classes,
+        'latent_dim': latent_dim,
+        'num_params': num_params,
+        'num_hidden': num_hidden,
+        'hidden_dim': hidden_dim,
+        'num_flows': num_flows,
+    }
+    #name='run_name',
+    #tags=['experiment1', ''],
+    #notes='Trying out a new architecture',
+    #dir='/path/to/log/files',
+    ##entity='my_team',
+    #group='experiment_group',
+    #job_type='train'
+)
+
 
 
 ############ CLASSES ################
 # Define the Normalising Flow model template
+
+
+from postnet.Encoder_Moons import Encoder_Moons
+from postnet.Encoder_MNIST import Encoder_MNIST
+from postnet.Encoder_CIFAR import Encoder_CIFAR
+from postnet.PosteriorNetwork_class import *
+
+
+"""
 class NormalisingFlow(nn.Module):
 
     def __init__(self, latent: Distribution, flows: List[nn.Module]):
@@ -289,6 +314,7 @@ class PosteriorNetwork(nn.Module):
         postnet_loss = torch.mean(-uce_loss_elements) + self.reg * torch.sum(entropy_reg) #negative since we want to minimize the loss
         #approximates the true posterior distribution for the categorical distribution p
         return postnet_loss
+"""
     
 ############ LOAD MNIST DATASET ################
 transform = transforms.Compose([
@@ -348,8 +374,6 @@ def accuracy(y_train, preds):
     return accuracy
 
 ############# INSTANTIATE MODEL ##################
-
-
 flow_models = []
 for class_label in range(num_classes):
     conditioner = Conditioner(in_dim=in_dim, out_dim=out_dim, num_hidden=num_hidden, hidden_dim=hidden_dim, num_params=num_params)

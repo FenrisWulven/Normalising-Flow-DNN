@@ -6,6 +6,7 @@ from torch.distributions import Dirichlet
 
 from postnet.Encoder_Moons import Encoder_Moons
 from postnet.Encoder_MNIST import Encoder_MNIST
+from postnet.Encoder_CIFAR import Encoder_CIFAR
 
 class NormalisingFlow(nn.Module):
 
