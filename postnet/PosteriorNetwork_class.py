@@ -4,14 +4,15 @@ from torch.distributions import Distribution
 from typing import List, Tuple, Callable
 from torch.distributions import Dirichlet
 
-from postnet.Encoder_Moons import Encoder_Moons
-from postnet.Encoder_MNIST import Encoder_MNIST
-from postnet.Encoder_CIFAR import Encoder_CIFAR
+
+from Encoder_Moons import Encoder_Moons
+from Encoder_MNIST import Encoder_MNIST
+from Encoder_CIFAR import Encoder_CIFAR
 
 class NormalisingFlow(nn.Module):
 
     def __init__(self, latent: Distribution, flows: List[nn.Module]):
-        super(NormalisingFlow, self).__init__()
+        super().__init__()
         self.latent = latent
         self.flows = nn.ModuleList(flows)
 
@@ -71,10 +72,13 @@ class NormalisingFlow(nn.Module):
 
 class AffineCouplingLayer(nn.Module):
 
-    def __init__(self, theta: nn.Module, split: Callable[[torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]):
-        super(AffineCouplingLayer, self).__init__()
+    def __init__(self, theta: nn.Module, split: Callable[[torch.Tensor], Tuple[torch.Tensor, torch.Tensor]],  data_dim: int):
+        super().__init__()
         self.theta = theta
         self.split = split
+        self.data_dim = data_dim
+        self.permutation = torch.randperm(self.data_dim)
+        self.inverse_permutation = torch.argsort(self.permutation)
 
     def f(self, x: torch.Tensor) -> torch.Tensor:
         '''f: x -> z. The inverse of g.'''
@@ -86,20 +90,24 @@ class AffineCouplingLayer(nn.Module):
         z1, z2 = x1, x2 * torch.exp(s) + t
         # z1 and z2 are: torch.Size([64, 1]) which means that batch size is 64 and the dimension is 1
         log_det = s.sum(-1) # sum over the last dimension
-        return torch.cat((z1, z2), dim=-1), log_det
+        cat = torch.cat((z1, z2), dim=-1)
+        permuted = cat[:, self.permutation]
+        return permuted, log_det
 
     def g(self, z: torch.Tensor) -> torch.Tensor:
         '''g: z -> x. The inverse of f.'''
-        z1, z2 = self.split(z)
+        permuted = z[:, self.inverse_permutation]
+        z1, z2 = self.split(permuted)
         t, s = self.theta(z1)
         x1, x2 = z1, (z2 - t) * torch.exp(-s)
-        return torch.cat((x2, x1), dim=-1)
+        cat = torch.cat((x2, x1), dim=-1)
+        return cat
 
 class Conditioner(nn.Module):
     'The conditioner is the Neural Network that helps fit the model to the data by learning theta_i = (s_i,t_i)'
 
     def __init__(self, in_dim: int, out_dim: int, num_hidden: int, hidden_dim: int, num_params: int):
-        super(Conditioner, self).__init__()
+        super().__init__()
         self.input = nn.Sequential(
             nn.Linear(in_dim, hidden_dim),
             nn.BatchNorm1d(hidden_dim),  
@@ -133,23 +141,31 @@ class Conditioner(nn.Module):
         params = batch_params.chunk(self.num_params, dim=-1)
         return [p.squeeze(-1) for p in params]
 
-def get_encoder(dataset_name, latent_dim):
-    if dataset_name == 'MNIST':
-        return Encoder_MNIST(latent_dim)
-    elif dataset_name == 'Moons':
-        return Encoder_Moons(latent_dim)
-    elif dataset_name == 'CIFAR':
-        return Encoder_CIFAR(latent_dim)
-    else:
-        raise ValueError(f"Unknown dataset: {dataset_name}")
+# def get_encoder(dataset_name, latent_dim):
+#     if dataset_name == 'MNIST':
+#         return Encoder_MNIST(latent_dim)
+#     elif dataset_name == 'Moons':
+#         return Encoder_Moons(latent_dim)
+#     #elif dataset_name == 'CIFAR':
+#      #   return Encoder_CIFAR(latent_dim)
+#     else:
+#         raise ValueError(f"Unknown dataset: {dataset_name}")
 
 class PosteriorNetwork(nn.Module):
-    def __init__(self, latent_dim: int, flow_models: List[nn.Module], N: torch.tensor, num_classes: int, y: torch.Tensor, reg: float, dataset_name: str):
-        super(PosteriorNetwork, self).__init__()
-        self.cnn = get_encoder(dataset_name, latent_dim)
+    def __init__(self, latent_dim: int, flow_models: List[nn.Module], N: torch.tensor, num_classes: int, reg: float, dataset_name: str): #y: torch.Tensor, 
+        super().__init__()
+
+        if dataset_name == 'Moons':
+            self.cnn = Encoder_Moons(latent_dim)
+        elif dataset_name == 'MNIST':
+            self.cnn = Encoder_MNIST(latent_dim)
+        #elif dataset_name == 'CIFAR':
+            #self.cnn = Encoder_CIFAR(latent_dim)
+        
+        #self.cnn = get_encoder(dataset_name, latent_dim)
         self.flow_models = nn.ModuleList(flow_models)
         self.N = N
-        self.y = y
+        #self.y = y
         self.num_classes = num_classes 
         self.reg = reg
     

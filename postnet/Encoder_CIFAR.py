@@ -9,7 +9,7 @@ class BasicBlock(nn.Module):
     expansion = 1
 
     def __init__(self, in_planes, planes, stride=1):
-        super(BasicBlock, self).__init__()
+        super().__init__()
         self.conv1 = nn.Conv2d(
             in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
@@ -33,9 +33,9 @@ class BasicBlock(nn.Module):
         return out
 
 
-class ResNet(nn.Module):
+class Encoder_CIFAR(nn.Module):
     def __init__(self, block, num_blocks, output_dim=10):
-        super(ResNet, self).__init__()
+        super().__init__()
         self.in_planes = 64
 
         self.conv1 = nn.Conv2d(3, 64, kernel_size=3,
@@ -68,4 +68,4 @@ class ResNet(nn.Module):
 
 
 def resnet18(output_dim):
-    return ResNet(BasicBlock, [2, 2, 2, 2], output_dim)
+    return Encoder_CIFAR(BasicBlock, [2, 2, 2, 2], output_dim)

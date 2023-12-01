@@ -6,10 +6,10 @@ from torch.distributions import Categorical
 from torch.distributions import Dirichlet
 from sklearn import metrics
 
-def accuracy(y, preds): 
+def accuracy(y, alpha): 
+    preds = torch.max(alpha, dim=-1)[1]
     accuracy = metrics.accuracy_score(y.cpu().numpy(), preds.cpu().numpy())
     return accuracy
-
 
 def brier_score(y, alpha):
     # y is the ground-truth class labels of size: [batch]
@@ -22,13 +22,12 @@ def brier_score(y, alpha):
     brier_score = p_normed.mean().cpu().detach().numpy() #1/N sum^N_i 
     return brier_score
 
-
 def confidence(y, alpha, score_type='AUROC', uncertainty_type='aleatoric'):
     preds = torch.max(alpha, dim=-1)[1]
-    correct_preds = (preds == y).sum().item().cpu().detach().numpy()
-
+    correct_preds = (preds == y)
     if uncertainty_type == 'epistemic':
         scores = alpha.max(-1)[0].cpu().detach().numpy() #max_alpha_values
+       
     elif uncertainty_type == 'aleatoric':
         p = F.normalize(alpha, p=1, dim=-1) # make probabilities from alpha
         scores = p.max(-1)[0].cpu().detach().numpy() #max probability values
@@ -40,6 +39,7 @@ def confidence(y, alpha, score_type='AUROC', uncertainty_type='aleatoric'):
         return metrics.average_precision_score(correct_preds, scores)
     else:
         raise NotImplementedError
+
 
 
 def ood_detection(alpha, ood_alpha, score_type='AUROC', uncertainty_type='aleatoric'):
@@ -55,7 +55,7 @@ def ood_detection(alpha, ood_alpha, score_type='AUROC', uncertainty_type='aleato
         ood_p = F.normalize(ood_alpha, p=1, dim=-1)
         ood_scores = ood_p.max(-1)[0].cpu().detach().numpy()
 
-    correct_preds = np.concatenate([np.ones(batch_size), np.zeros(ood_batch_size)], axis=0) # what does this do? It     
+    correct_preds = np.concatenate([np.ones(batch_size), np.zeros(ood_batch_size)], axis=0) #correct_preds are 1 for in-distribution and 0 for ood
     scores = np.concatenate([scores, ood_scores], axis=0)
 
     if score_type == 'AUROC':
