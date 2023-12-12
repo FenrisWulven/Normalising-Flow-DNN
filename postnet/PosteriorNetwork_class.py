@@ -7,7 +7,7 @@ from torch.distributions import Dirichlet
 
 from Encoder_Moons import Encoder_Moons
 from Encoder_MNIST import Encoder_MNIST
-from Encoder_CIFAR import Encoder_CIFAR
+from Encoder_CIFAR import Encoder_CIFAR, BasicBlock
 
 class NormalisingFlow(nn.Module):
 
@@ -140,32 +140,21 @@ class Conditioner(nn.Module):
         #batch_params[:,:,0] *= 0.001 
         params = batch_params.chunk(self.num_params, dim=-1)
         return [p.squeeze(-1) for p in params]
-
-# def get_encoder(dataset_name, latent_dim):
-#     if dataset_name == 'MNIST':
-#         return Encoder_MNIST(latent_dim)
-#     elif dataset_name == 'Moons':
-#         return Encoder_Moons(latent_dim)
-#     #elif dataset_name == 'CIFAR':
-#      #   return Encoder_CIFAR(latent_dim)
-#     else:
-#         raise ValueError(f"Unknown dataset: {dataset_name}")
+        
 
 class PosteriorNetwork(nn.Module):
-    def __init__(self, latent_dim: int, flow_models: List[nn.Module], N: torch.tensor, num_classes: int, reg: float, dataset_name: str): #y: torch.Tensor, 
+    def __init__(self, latent_dim: int, flow_models: List[nn.Module], N: torch.tensor, num_classes: int, reg: float, dataset_name: str): 
         super().__init__()
 
         if dataset_name == 'Moons':
             self.cnn = Encoder_Moons(latent_dim)
         elif dataset_name == 'MNIST':
             self.cnn = Encoder_MNIST(latent_dim)
-        #elif dataset_name == 'CIFAR':
-            #self.cnn = Encoder_CIFAR(latent_dim)
+        elif dataset_name == 'CIFAR10':
+            self.cnn = Encoder_CIFAR(block=BasicBlock, num_blocks=[2, 2, 2, 2], output_dim=latent_dim)
         
-        #self.cnn = get_encoder(dataset_name, latent_dim)
         self.flow_models = nn.ModuleList(flow_models)
         self.N = N
-        #self.y = y
         self.num_classes = num_classes 
         self.reg = reg
     
@@ -178,12 +167,12 @@ class PosteriorNetwork(nn.Module):
             print(torch.where(torch.isnan(z)))
             print(z[torch.where(torch.isnan(z))])
             # Change NaN value to 0
-            z[torch.where(torch.isnan(z))] = 0
+            z[torch.where(torch.isnan(z))] = 0.0001
 
             print(torch.where(torch.isinf(z)))
             print(z[torch.where(torch.isinf(z))])
             # Change Inf value to 0
-            z[torch.where(torch.isinf(z))] = 0
+            z[torch.where(torch.isinf(z))] = 0.0001
     
         # for each class, since outputdim = num_classes
         alpha = torch.zeros((batch_size, self.num_classes)).to(z.device.type)
@@ -216,6 +205,18 @@ class PosteriorNetwork(nn.Module):
         # Key change: this gets the alpha value for the correct class for each obs in batch, instead of all alpha values for each obs as in the original paper
         # since we are only interested in optimising this the correct class value, and the other values are irrelevant (also because our y-labels only have one class value)
         uce_loss_elements = digamma_alpha_0 - digamma_alpha_c #changed to 0-c instead of c-0 to get positive values 
+        
+        if torch.isnan(alpha).any() or torch.isinf(alpha).any():
+            print("NaN or Inf in tensor alpha")
+            print("Nan where: ",torch.where(torch.isnan(alpha)))
+            print(alpha[torch.where(torch.isnan(alpha))])
+            # Change NaN value to 0
+            alpha[torch.where(torch.isnan(alpha))] = 0.01
+
+            print("Inf where: ",torch.where(torch.isinf(alpha)))
+            print(alpha[torch.where(torch.isinf(alpha))])
+            # Change Inf value to 0
+            alpha[torch.where(torch.isinf(alpha))] = 0.01
         entropy_reg = Dirichlet(alpha).entropy() #tensor of batch shape
         # Paper uses sum loss over batch - I think mean would be better since we have different batch sizes for different datasets
         postnet_loss = torch.sum(uce_loss_elements) - self.reg * torch.sum(entropy_reg) #negative since we want to minimize the loss

@@ -6,7 +6,11 @@ import math
 import wandb
 import os
 
-from metrics import accuracy
+import sys
+get_cwd = os.getcwd()
+root_dir = get_cwd #os.path.dirname(get_cwd)
+sys.path.append(root_dir) 
+from postnet.metrics import accuracy
 
 get_cwd = os.getcwd()
 root_dir = get_cwd
@@ -19,7 +23,7 @@ class GradualWarmupScheduler(torch.optim.lr_scheduler._LRScheduler):
         self.warmup_steps = warmup_steps
         self.start_lr = start_lr
         self.end_lr = end_lr
-        self.lr_increment = (end_lr - start_lr) / warmup_steps
+        self.lr_increment = (end_lr - start_lr) / warmup_steps  # given 1e-5 and 1e-7 and 1000 then 
         super().__init__(optimiser, last_epoch)
 
     def get_lr(self):
@@ -28,15 +32,20 @@ class GradualWarmupScheduler(torch.optim.lr_scheduler._LRScheduler):
             return [lr for _ in self.base_lrs]
         return self.base_lrs
 
-
+## DONT USE
 def init_weights(model):
     if isinstance(model, nn.Linear):
         nn.init.xavier_normal_(model.weight)
         nn.init.zeros_(model.bias) 
 
+def ceiling(x):
+    if x == int(x):
+        return int(x)
+    else:
+        return int(x) + 1
 
 def train(model, optimiser, train_loader, val_loader, num_epochs, validation_every_steps, early_stop_delta, 
-          early_stop_patience, warmup_scheduler, training_scheduler, warmup_steps, N_counts, set_lengths, device, save_model):
+          early_stop_patience, warmup_scheduler, training_scheduler, warmup_steps, N_counts, set_lengths, device, save_model, gamma):
     model.train()
     train_losses, train_accuracies, val_losses, val_accuracies = [], [], [], []
     all_train_losses = []
@@ -45,13 +54,14 @@ def train(model, optimiser, train_loader, val_loader, num_epochs, validation_eve
     counter = 0 # for early stopping 
     early_stopping = False
     total_steps_per_epoch = len(train_loader)  # Total batches (steps) per epoch
-    warmup_epochs = math.ceil(warmup_steps / total_steps_per_epoch)  # Total warmup epochs
+    warmup_epochs = ceiling(warmup_steps / total_steps_per_epoch)  # Total warmup epochs
     print("Steps_per_epoch", total_steps_per_epoch)
     print("Warmup epochs:", warmup_epochs)
     wandb.watch(model, log="all")
 
     for epoch in range(num_epochs): #epoch is one forward pass through the entire training set
         train_losses_batches, train_accuracies_batches = [], []
+        
         #batches_counter = 0
 
         for batch_index, (X_train, y_train) in enumerate(train_loader):
@@ -64,12 +74,17 @@ def train(model, optimiser, train_loader, val_loader, num_epochs, validation_eve
             # Perform one training step
             optimiser.zero_grad()
             loss.backward()
-            utils.clip_grad_norm_(model.parameters(), max_norm=2.0)
+            utils.clip_grad_norm_(model.parameters(), max_norm=1.0) #max_norm=2.0
             
             optimiser.step()
             if step < warmup_steps:
                 warmup_scheduler.step()
-            
+            else:
+               for param_group in optimiser.param_groups:
+                   param_group['lr'] *= gamma # 
+                # if epoch >= warmup_epochs:
+                #training_scheduler.step()
+                
             step += 1
             #train_losses.append(loss.item())
 
@@ -112,13 +127,8 @@ def train(model, optimiser, train_loader, val_loader, num_epochs, validation_eve
                         
                         # Evaluation accuracy and loss for this batch
                         preds = torch.max(alpha, dim=-1)[1]
-                        
                         correct_batch = (preds == y_val).sum().item()
                         val_correct.append(correct_batch)
-
-                        #Maybe: Multiply by len(x) because the final batch of DataLoader may be smaller (drop_last=False).
-                        #val_accuracies_batches.append(accuracy(y_val, preds) * len(X_val))
-
                         # append the loss for this batch
                         val_losses_batches.append(loss.item())
 
@@ -144,7 +154,7 @@ def train(model, optimiser, train_loader, val_loader, num_epochs, validation_eve
                     best_val_loss = val_losses[-1]
                     counter = 0
                     best_model = model.state_dict()
-                    torch.save({'epoch': epoch, 'model_state_dict': best_model, 'loss': best_val_loss}, os.path.join(models_dir, save_model))
+                    torch.save({'epoch': epoch, 'model_state_dict': best_model, 'loss': best_val_loss}, os.path.join(models_dir, save_model + '.pth'))
                     print('Model saved')
 
                 # Early stopping - if val_loss is not improving (plus a delta e-4 as buffer) then start counter
@@ -157,9 +167,10 @@ def train(model, optimiser, train_loader, val_loader, num_epochs, validation_eve
                         break
         
         # Update training scheduler (annealing LR)
-        if epoch >= warmup_epochs:
-                #if (epoch - warmup_epochs) % annealing_interval == 0:
-                training_scheduler.step()
+        # if epoch >= warmup_epochs:
+        #     training_scheduler.step()
+            #if (epoch - warmup_epochs) % annealing_interval == 0:
+            
         #current_lr = optimiser.param_groups[0]['lr']
         #print(f"Epoch {epoch}: Current Epoch LR = {current_lr}")
 
@@ -167,4 +178,4 @@ def train(model, optimiser, train_loader, val_loader, num_epochs, validation_eve
             print("Early stopping triggered. Exiting training.")
             break  # Break out of the outer loop
     print("Finished training.")
-    return train_losses, val_losses, train_accuracies, val_accuracies, all_train_losses #,model
+    return train_losses, val_losses, train_accuracies, val_accuracies, all_train_losses 

@@ -1,0 +1,8 @@
+entropy_aleatoric_MNIST,entropy_epistemic_MNIST,entropy_aleatoric_FashionMNIST,entropy_epistemic_FashionMNIST,entropy_aleatoric_KMNIST,entropy_epistemic_KMNIST
+"[array([0.2875791 , 0.04849575, 0.0335176 , ..., 0.00356752, 0.0092602 ,
+       0.01060454], dtype=float32)]","[array([ -40346.38 ,  -18555.352,  -41719.105, ..., -413025.47 ,
+        -99766.99 , -104254.016], dtype=float32)]","[array([0.90325046, 0.45910427, 1.1749014 , ..., 1.8699112 , 0.06458928,
+       0.08817464], dtype=float32)]","[array([-13626.358  ,  -2139.2095 ,  -1045.2498 , ...,   -211.94034,
+       -17155.264  , -28664.338  ], dtype=float32)]","[array([0.5318006 , 1.4232188 , 1.2570541 , ..., 0.5122785 , 0.49854407,
+       1.8960855 ], dtype=float32)]","[array([-2370.0698,  -755.5231,  -784.4686, ..., -7059.0166, -5906.0044,
+       -1553.6912], dtype=float32)]"

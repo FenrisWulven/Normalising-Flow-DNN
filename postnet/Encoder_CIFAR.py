@@ -1,27 +1,30 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+#ResNet18
 
 # Directly from 
 # https://github.com/sharpenb/Posterior-Network/blob/main/src/architectures/resnet_sequential.py
+# They took it from
+# [1] Kaiming He, Xiangyu Zhang, Shaoqing Ren, Jian Sun
+    # Deep Residual Learning for Image Recognition. arXiv:1512.03385
+# For Pre-activation ResNet, see 'preact_resnet.py'.
+
 
 class BasicBlock(nn.Module):
     expansion = 1
 
     def __init__(self, in_planes, planes, stride=1):
         super().__init__()
-        self.conv1 = nn.Conv2d(
-            in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3,
-                               stride=1, padding=1, bias=False)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3,stride=1, padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(planes)
 
         self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != self.expansion*planes:
             self.shortcut = nn.Sequential(
-                nn.Conv2d(in_planes, self.expansion*planes,
-                          kernel_size=1, stride=stride, bias=False),
+                nn.Conv2d(in_planes, self.expansion*planes, kernel_size=1, stride=stride, bias=False),
                 nn.BatchNorm2d(self.expansion*planes)
             )
 
@@ -38,8 +41,7 @@ class Encoder_CIFAR(nn.Module):
         super().__init__()
         self.in_planes = 64
 
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=3,
-                               stride=1, padding=1, bias=False)
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
         self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
@@ -66,6 +68,3 @@ class Encoder_CIFAR(nn.Module):
         out = self.linear(out)
         return out
 
-
-def resnet18(output_dim):
-    return Encoder_CIFAR(BasicBlock, [2, 2, 2, 2], output_dim)
